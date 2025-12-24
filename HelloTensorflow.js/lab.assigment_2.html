@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Task 2 - Vector Operations</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+</head>
+<body>
+
+<script>
+    const v1 = tf.tensor1d([2, 4, 6]);
+    const v2 = tf.tensor1d([1, 3, 5]);
+
+    // Element-wise addition
+    const add = v1.add(v2);
+
+    // Element-wise multiplication
+    const multiply = v1.mul(v2);
+
+    add.print();       // [3, 7, 11]
+    multiply.print(); // [2, 12, 30]
+</script>
+
+</body>
+</html>
