@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Linear Regression</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+</head>
+<body>
+
+<h3>Linear Regression using TensorFlow.js</h3>
+<p>Check console output</p>
+
+<script>
+async function trainModel() {
+
+    const x = tf.tensor1d([1, 2, 3, 4, 5]);
+    const y = tf.tensor1d([3, 5, 7, 9, 11]);
+
+    const model = tf.sequential();
+    model.add(tf.layers.dense({ units: 1, inputShape: [1] }));
+
+    model.compile({
+        optimizer: 'sgd',
+        loss: 'meanSquaredError'
+    });
+
+    await model.fit(x, y);
+
+    const prediction = model.predict(tf.tensor2d([6], [1,1]));
+    prediction.print();
+}
+
+trainModel();
+</script>
+
+</body>
+</html>
