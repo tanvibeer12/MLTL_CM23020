@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>AI Sentiment Analyzer | Tanvi</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+
+<style>
+
+body{
+margin:0;
+height:100vh;
+display:flex;
+justify-content:center;
+align-items:center;
+background:linear-gradient(135deg,#0f2027,#203a43,#2c5364);
+font-family:Segoe UI;
+color:white;
+}
+
+.analyzer{
+
+width:520px;
+height:520px;
+
+border-radius:50%;
+
+background:#111827;
+
+border:6px solid #22c55e;
+
+box-shadow:0 0 35px #22c55e;
+
+display:flex;
+flex-direction:column;
+justify-content:center;
+align-items:center;
+
+text-align:center;
+
+padding:30px;
+
+}
+
+textarea{
+
+width:80%;
+height:80px;
+
+border-radius:10px;
+border:none;
+
+padding:10px;
+
+}
+
+button{
+
+margin-top:10px;
+
+padding:10px 25px;
+
+border:none;
+
+border-radius:20px;
+
+background:#22c55e;
+
+cursor:pointer;
+
+}
+
+.result{
+
+margin-top:15px;
+
+font-size:22px;
+
+}
+
+.confidence{
+
+font-size:14px;
+
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="analyzer">
+
+<h2>AI Sentiment Analyzer</h2>
+
+<textarea id="inputText" placeholder="Type text"></textarea>
+
+<button onclick="predict()">Analyze Sentiment</button>
+
+<button onclick="compareModels()">Compare Dense vs RNN</button>
+
+<div class="result" id="result"></div>
+
+<div class="confidence" id="confidence"></div>
+
+</div>
+
+<script type="module">
+
+import { pipeline } from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2";
+
+let model;
+
+/* load AI model */
+
+async function loadModel(){
+
+model = await pipeline(
+"sentiment-analysis",
+"Xenova/distilbert-base-uncased-finetuned-sst-2-english"
+);
+
+}
+
+await loadModel();
+
+/* sentiment prediction */
+
+window.predict = async function(){
+
+let text=document.getElementById("inputText").value;
+
+if(text==""){
+alert("Enter text");
+return;
+}
+
+const output = await model(text);
+
+let label=output[0].label;
+
+let score=(output[0].score*100).toFixed(2);
+
+let emoji = label==="POSITIVE" ? "😊":"😞";
+
+document.getElementById("result").innerHTML=
+label+" "+emoji;
+
+document.getElementById("confidence").innerHTML=
+"Confidence: "+score+"%";
+
+}
+
+/* Dense vs RNN */
+
+window.compareModels = async function(){
+
+const sentences=[
+"I love this product",
+"This phone is amazing",
+"I am very happy",
+"Great experience",
+"I hate this product",
+"This phone is terrible",
+"Worst purchase ever",
+"Very bad experience"
+];
+
+const labels=[1,1,1,1,0,0,0,0];
+
+const xs=tf.tensor2d([
+[1,2,3,0,0],
+[2,3,4,0,0],
+[3,4,5,0,0],
+[4,5,6,0,0],
+[7,8,9,0,0],
+[8,9,10,0,0],
+[9,10,11,0,0],
+[10,11,12,0,0]
+]);
+
+const ys=tf.tensor2d(labels,[labels.length,1]);
+
+/* Dense Model */
+
+const dense=tf.sequential();
+
+dense.add(tf.layers.embedding({
+inputDim:50,
+outputDim:8,
+inputLength:5
+}));
+
+dense.add(tf.layers.flatten());
+
+dense.add(tf.layers.dense({
+units:8,
+activation:"relu"
+}));
+
+dense.add(tf.layers.dense({
+units:1,
+activation:"sigmoid"
+}));
+
+dense.compile({
+optimizer:"adam",
+loss:"binaryCrossentropy",
+metrics:["accuracy"]
+});
+
+await dense.fit(xs,ys,{epochs:20,verbose:0});
+
+let denseEval=dense.evaluate(xs,ys);
+
+let denseAcc=(await denseEval[1].data())[0];
+
+/* RNN Model */
+
+const rnn=tf.sequential();
+
+rnn.add(tf.layers.embedding({
+inputDim:50,
+outputDim:8,
+inputLength:5
+}));
+
+rnn.add(tf.layers.lstm({
+units:8
+}));
+
+rnn.add(tf.layers.dense({
+units:1,
+activation:"sigmoid"
+}));
+
+rnn.compile({
+optimizer:"adam",
+loss:"binaryCrossentropy",
+metrics:["accuracy"]
+});
+
+await rnn.fit(xs,ys,{epochs:20,verbose:0});
+
+let rnnEval=rnn.evaluate(xs,ys);
+
+let rnnAcc=(await rnnEval[1].data())[0];
+
+document.getElementById("result").innerHTML="Model Comparison";
+
+document.getElementById("confidence").innerHTML=
+
+"Dense Accuracy: "+denseAcc.toFixed(2)+"<br>"+
+"RNN Accuracy: "+rnnAcc.toFixed(2);
+
+}
+
+</script>
+
+</body>
+</html>

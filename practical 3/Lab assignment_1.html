@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Sentiment Classifier | Tanvi</title>
+
+<!-- TensorFlow JS CDN -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+
+<style>
+
+body{
+font-family:Arial;
+background:#1f2937;
+color:white;
+display:flex;
+justify-content:center;
+align-items:center;
+height:100vh;
+margin:0;
+}
+
+.container{
+background:#111827;
+padding:30px;
+border-radius:10px;
+width:500px;
+text-align:center;
+box-shadow:0 0 20px #22c55e;
+}
+
+textarea{
+width:90%;
+height:90px;
+margin-top:10px;
+padding:10px;
+font-size:15px;
+border-radius:8px;
+border:none;
+}
+
+button{
+margin-top:15px;
+padding:10px 20px;
+font-size:16px;
+border:none;
+background:#22c55e;
+color:black;
+cursor:pointer;
+border-radius:6px;
+}
+
+.result{
+margin-top:20px;
+font-size:20px;
+font-weight:bold;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h2>Sentiment Classifier (Training Model)</h2>
+
+<button onclick="trainModel()">Train Model</button>
+
+<br>
+
+<textarea id="inputText" placeholder="Enter text to analyze"></textarea>
+
+<br>
+
+<button onclick="predict()">Predict Sentiment</button>
+
+<div class="result" id="result"></div>
+
+</div>
+
+<script>
+
+let model;
+let vocabulary = {};
+
+// small dataset
+const dataset = [
+{ text:"I love this product", label:1 },
+{ text:"This phone is amazing", label:1 },
+{ text:"Great service and quality", label:1 },
+{ text:"I am very happy", label:1 },
+{ text:"Fantastic experience", label:1 },
+
+{ text:"I hate this product", label:0 },
+{ text:"This is terrible", label:0 },
+{ text:"Very bad experience", label:0 },
+{ text:"Worst product ever", label:0 },
+{ text:"I am disappointed", label:0 }
+];
+
+function tokenize(text){
+return text.toLowerCase().split(" ");
+}
+
+function buildVocabulary(){
+
+let index=1;
+
+dataset.forEach(item=>{
+
+let words=tokenize(item.text);
+
+words.forEach(word=>{
+if(!vocabulary[word]){
+vocabulary[word]=index++;
+}
+});
+
+});
+
+}
+
+function textToSequence(text){
+
+let words=tokenize(text);
+let seq=[];
+
+words.forEach(word=>{
+seq.push(vocabulary[word] || 0);
+});
+
+return seq;
+
+}
+
+async function trainModel(){
+
+buildVocabulary();
+
+let sequences=[];
+let labels=[];
+
+dataset.forEach(item=>{
+sequences.push(textToSequence(item.text));
+labels.push(item.label);
+});
+
+const maxLen=6;
+
+let padded = sequences.map(seq=>{
+while(seq.length<maxLen) seq.push(0);
+return seq.slice(0,maxLen);
+});
+
+const xs=tf.tensor2d(padded);
+const ys=tf.tensor2d(labels,[labels.length,1]);
+
+model=tf.sequential();
+
+model.add(tf.layers.embedding({
+inputDim:1000,
+outputDim:16,
+inputLength:maxLen
+}));
+
+model.add(tf.layers.flatten());
+
+model.add(tf.layers.dense({units:16,activation:"relu"}));
+
+model.add(tf.layers.dense({units:1,activation:"sigmoid"}));
+
+model.compile({
+optimizer:"adam",
+loss:"binaryCrossentropy",
+metrics:["accuracy"]
+});
+
+document.getElementById("result").innerText="Training model...";
+
+await model.fit(xs,ys,{epochs:20});
+
+document.getElementById("result").innerText="Training completed";
+
+}
+
+async function predict(){
+
+let text=document.getElementById("inputText").value;
+
+let seq=textToSequence(text);
+
+while(seq.length<6) seq.push(0);
+
+let input=tf.tensor2d([seq]);
+
+let prediction=model.predict(input);
+
+let score=(await prediction.data())[0];
+
+let sentiment = score>0.5 ? "Positive 😊" : "Negative 😞";
+
+document.getElementById("result").innerText =
+sentiment+" (Score: "+score.toFixed(2)+")";
+
+}
+
+</script>
+
+</body>
+
+</html>

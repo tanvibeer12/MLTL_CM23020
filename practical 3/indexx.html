@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Text Sentiment Analyzer | Tanvi</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+
+<style>
+
+*{
+box-sizing:border-box;
+font-family:Segoe UI;
+}
+
+body{
+margin:0;
+height:100vh;
+display:flex;
+justify-content:center;
+align-items:center;
+background:linear-gradient(135deg,#141e30,#243b55);
+color:white;
+}
+
+/* glass card */
+
+.card{
+width:600px;
+background:rgba(255,255,255,0.05);
+border-radius:20px;
+padding:35px;
+backdrop-filter:blur(15px);
+box-shadow:0 10px 40px rgba(0,0,0,0.6);
+text-align:center;
+}
+
+h1{
+margin-bottom:5px;
+color:#00e5ff;
+text-shadow:0 0 10px #00e5ff;
+}
+
+.status{
+font-size:13px;
+margin-bottom:15px;
+opacity:0.8;
+}
+
+textarea{
+width:90%;
+height:90px;
+border-radius:10px;
+border:none;
+padding:12px;
+font-size:15px;
+background:#f1f5f9;
+}
+
+/* buttons */
+
+button{
+margin-top:15px;
+padding:12px 28px;
+border:none;
+border-radius:25px;
+background:linear-gradient(45deg,#00e5ff,#00ffa6);
+font-size:15px;
+cursor:pointer;
+transition:0.3s;
+}
+
+button:hover{
+transform:scale(1.05);
+}
+
+/* scan animation */
+
+.scan{
+margin-top:20px;
+width:100%;
+height:6px;
+background:#334155;
+border-radius:10px;
+overflow:hidden;
+}
+
+.scanline{
+height:100%;
+width:0%;
+background:#00ffa6;
+transition:width 1s;
+}
+
+/* result */
+
+.result{
+margin-top:20px;
+font-size:26px;
+font-weight:bold;
+}
+
+.confidence{
+font-size:14px;
+margin-top:5px;
+}
+
+/* model comparison */
+
+.compare{
+margin-top:20px;
+}
+
+.bar{
+width:100%;
+height:10px;
+background:#334155;
+border-radius:10px;
+margin-top:5px;
+overflow:hidden;
+}
+
+.progress{
+height:100%;
+width:0%;
+background:#00ffa6;
+transition:width 1s;
+}
+
+.footer{
+margin-top:15px;
+font-size:12px;
+opacity:0.7;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="card">
+
+<h1>Text Sentiment Analyzer</h1>
+
+<div class="status" id="status">Loading Sentiment Model...</div>
+
+<textarea id="inputText" placeholder="Type a sentence"></textarea>
+
+<br>
+
+<button id="analyzeBtn" disabled>
+Analyze Sentiment
+</button>
+
+<button onclick="compareModels()">
+Compare Dense vs RNN
+</button>
+
+<div class="scan">
+<div class="scanline" id="scanline"></div>
+</div>
+
+<div class="result" id="result"></div>
+<div class="confidence" id="confidence"></div>
+
+<div class="compare">
+
+Dense Network
+<div class="bar">
+<div class="progress" id="denseBar"></div>
+</div>
+<span id="denseAcc"></span>
+
+<br>
+
+RNN Network
+<div class="bar">
+<div class="progress" id="rnnBar"></div>
+</div>
+<span id="rnnAcc"></span>
+
+</div>
+
+<div class="footer">
+MLT Practical | Developed by Tanvi
+</div>
+
+</div>
+
+<script type="module">
+
+import { pipeline } from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2";
+
+let model;
+
+/* Load sentiment model */
+
+async function loadModel(){
+
+model = await pipeline(
+"sentiment-analysis",
+"Xenova/distilbert-base-uncased-finetuned-sst-2-english"
+);
+
+document.getElementById("status").innerText="Model Ready ✔";
+
+document.getElementById("analyzeBtn").disabled=false;
+
+}
+
+await loadModel();
+
+/* Sentiment prediction */
+
+document.getElementById("analyzeBtn").onclick = async ()=>{
+
+let text=document.getElementById("inputText").value;
+
+if(text.trim()==""){
+alert("Enter text");
+return;
+}
+
+let scan=document.getElementById("scanline");
+
+scan.style.width="40%";
+
+setTimeout(()=>{scan.style.width="80%"},400);
+
+setTimeout(()=>{scan.style.width="100%"},800);
+
+const output=await model(text);
+
+let label=output[0].label;
+
+let score=(output[0].score*100).toFixed(2);
+
+let emoji = label==="POSITIVE" ? "😊":"😞";
+
+document.getElementById("result").innerHTML=
+label+" "+emoji;
+
+document.getElementById("confidence").innerHTML=
+"Confidence: "+score+"%";
+
+};
+
+/* Dense vs RNN comparison */
+
+window.compareModels=async function(){
+
+const labels=[1,1,1,1,0,0,0,0];
+
+const xs=tf.tensor2d([
+[1,2,3,0,0],
+[2,3,4,0,0],
+[3,4,5,0,0],
+[4,5,6,0,0],
+[7,8,9,0,0],
+[8,9,10,0,0],
+[9,10,11,0,0],
+[10,11,12,0,0]
+]);
+
+const ys=tf.tensor2d(labels,[labels.length,1]);
+
+/* Dense model */
+
+const dense=tf.sequential();
+
+dense.add(tf.layers.embedding({inputDim:50,outputDim:8,inputLength:5}));
+
+dense.add(tf.layers.flatten());
+
+dense.add(tf.layers.dense({units:8,activation:"relu"}));
+
+dense.add(tf.layers.dense({units:1,activation:"sigmoid"}));
+
+dense.compile({optimizer:"adam",loss:"binaryCrossentropy",metrics:["accuracy"]});
+
+await dense.fit(xs,ys,{epochs:20,verbose:0});
+
+let denseEval=dense.evaluate(xs,ys);
+
+let denseAcc=(await denseEval[1].data())[0];
+
+/* RNN model */
+
+const rnn=tf.sequential();
+
+rnn.add(tf.layers.embedding({inputDim:50,outputDim:8,inputLength:5}));
+
+rnn.add(tf.layers.lstm({units:8}));
+
+rnn.add(tf.layers.dense({units:1,activation:"sigmoid"}));
+
+rnn.compile({optimizer:"adam",loss:"binaryCrossentropy",metrics:["accuracy"]});
+
+await rnn.fit(xs,ys,{epochs:20,verbose:0});
+
+let rnnEval=rnn.evaluate(xs,ys);
+
+let rnnAcc=(await rnnEval[1].data())[0];
+
+let densePercent=(denseAcc*100).toFixed(0);
+
+let rnnPercent=(rnnAcc*100).toFixed(0);
+
+document.getElementById("denseBar").style.width=densePercent+"%";
+document.getElementById("rnnBar").style.width=rnnPercent+"%";
+
+document.getElementById("denseAcc").innerText="Accuracy: "+densePercent+"%";
+document.getElementById("rnnAcc").innerText="Accuracy: "+rnnPercent+"%";
+
+}
+
+</script>
+
+</body>
+</html>

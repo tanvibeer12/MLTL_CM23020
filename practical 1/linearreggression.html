@@ -1,35 +1,96 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Linear Regression</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+    <title>Linear Regression – Console + Plot</title>
+
+    <!-- TensorFlow.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
-<h3>Linear Regression using TensorFlow.js</h3>
-<p>Check console output</p>
+<h2>Linear Regression </h2>
+<p>Linear Regression with Synthetic Data
+</b></p>
+
+<canvas id="myChart" width="600" height="400"></canvas>
 
 <script>
-async function trainModel() {
+let model;
+let chart;
 
-    const x = tf.tensor1d([1, 2, 3, 4, 5]);
-    const y = tf.tensor1d([3, 5, 7, 9, 11]);
+// Train model and draw plot
+async function runModel() {
 
-    const model = tf.sequential();
+    // Training data (y = 2x + 1)
+    const xValues = [1, 2, 3, 4, 5];
+    const yValues = [3, 5, 7, 9, 11];
+
+    const xs = tf.tensor2d(xValues, [5, 1]);
+    const ys = tf.tensor2d(yValues, [5, 1]);
+
+    // Create model
+    model = tf.sequential();
     model.add(tf.layers.dense({ units: 1, inputShape: [1] }));
 
+    // Compile
     model.compile({
-        optimizer: 'sgd',
+        optimizer: tf.train.sgd(0.01),
         loss: 'meanSquaredError'
     });
 
-    await model.fit(x, y);
+    // Train
+    await model.fit(xs, ys, { epochs: 200, verbose: 0 });
 
-    const prediction = model.predict(tf.tensor2d([6], [1,1]));
-    prediction.print();
+    console.log("Model trained.");
+    console.log("Use predictX(value) in console.");
+
+    // Predictions for plot
+    const preds = model.predict(xs).dataSync();
+
+    // Draw line plot
+    const ctx = document.getElementById("myChart").getContext("2d");
+
+    chart = new Chart(ctx, {
+        type: "line",
+        data: {
+            labels: xValues,
+            datasets: [
+                {
+                    label: "Actual Values",
+                    data: yValues,
+                    borderColor: "blue",
+                    fill: false
+                },
+                {
+                    label: "Predicted Values",
+                    data: Array.from(preds),
+                    borderColor: "red",
+                    fill: false
+                }
+            ]
+        },
+        options: {
+            responsive: false,
+            scales: {
+                x: { title: { display: true, text: "X" } },
+                y: { title: { display: true, text: "Y" } }
+            }
+        }
+    });
 }
 
-trainModel();
+// Console prediction function
+function predictX(x) {
+    const input = tf.tensor2d([x], [1, 1]);
+    const output = model.predict(input);
+    output.print();
+}
+
+// Run training
+runModel();
 </script>
 
 </body>
