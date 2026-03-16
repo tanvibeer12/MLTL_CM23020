@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Model Comparison</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+
+<style>
+
+body{
+margin:0;
+height:100vh;
+display:flex;
+justify-content:center;
+align-items:center;
+font-family:Arial;
+background:linear-gradient(135deg,#667eea,#764ba2);
+}
+
+.container{
+background:white;
+padding:30px;
+border-radius:15px;
+width:800px;
+text-align:center;
+box-shadow:0 10px 25px rgba(0,0,0,0.2);
+}
+
+.controls{
+margin-bottom:20px;
+}
+
+button{
+padding:10px 20px;
+border:none;
+background:#667eea;
+color:white;
+border-radius:6px;
+cursor:pointer;
+}
+
+.main{
+display:flex;
+justify-content:space-between;
+align-items:center;
+}
+
+.box{
+width:30%;
+background:#f4f6ff;
+padding:15px;
+border-radius:10px;
+min-height:200px;
+text-align:left;
+}
+
+.imageBox{
+width:30%;
+}
+
+img{
+width:200px;
+border-radius:10px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<h2>Model Comparison</h2>
+
+<div class="controls">
+<input type="file" id="upload">
+<button onclick="predict()">Predict</button>
+</div>
+
+<div class="main">
+
+<div class="box">
+<h3>MobileNet</h3>
+<div id="mobilenetResult"></div>
+</div>
+
+<div class="imageBox">
+<img id="image">
+</div>
+
+<div class="box">
+<h3>COCO SSD</h3>
+<div id="cocoResult"></div>
+</div>
+
+</div>
+
+</div>
+
+<script src="script.js"></script>
+
+</body>
+</html>

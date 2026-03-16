@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Image Classification</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet"></script>
+
+<style>
+
+body{
+font-family:Arial;
+background:#f2f2f2;
+padding:20px;
+}
+
+.container{
+width:600px;
+margin:auto;
+background:white;
+padding:20px;
+border-radius:10px;
+}
+
+.box{
+border:1px solid #ccc;
+padding:10px;
+margin-top:15px;
+border-radius:8px;
+}
+
+img{
+width:200px;
+display:block;
+margin-top:10px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<h2>Test Classification on 5 Images</h2>
+
+<div class="box">
+Image 1
+<input type="file" id="file1">
+<img id="img1">
+<div id="res1"></div>
+</div>
+
+<div class="box">
+Image 2
+<input type="file" id="file2">
+<img id="img2">
+<div id="res2"></div>
+</div>
+
+<div class="box">
+Image 3
+<input type="file" id="file3">
+<img id="img3">
+<div id="res3"></div>
+</div>
+
+<div class="box">
+Image 4
+<input type="file" id="file4">
+<img id="img4">
+<div id="res4"></div>
+</div>
+
+<div class="box">
+Image 5
+<input type="file" id="file5">
+<img id="img5">
+<div id="res5"></div>
+</div>
+
+</div>
+
+<script src="script.js"></script>
+
+</body>
+</html>
