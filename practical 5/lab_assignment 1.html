@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Webcam Object Classification - Tanvi Beer</title>
+
+<!-- TensorFlow.js -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<!-- MobileNet -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet"></script>
+
+<style>
+body{
+margin:0;
+height:100vh;
+display:flex;
+justify-content:center;
+align-items:center;
+background: linear-gradient(135deg,#1e3c72,#2a5298); /* Blue gradient */
+font-family: 'Poppins', sans-serif;
+}
+
+.container{
+background:white;
+padding:25px;
+border-radius:20px;
+box-shadow:0 15px 40px rgba(0,0,0,0.5);
+text-align:center;
+width:550px;
+}
+
+h1{
+margin-bottom:15px;
+color:#1a1a1a;
+}
+
+video{
+width:450px;
+height:350px;
+border-radius:15px;
+border:4px solid #2a5298;
+}
+
+button{
+margin-top:15px;
+padding:12px 28px;
+font-size:16px;
+border:none;
+background:#ff5722;
+color:white;
+border-radius:8px;
+cursor:pointer;
+transition: 0.3s;
+}
+
+button:hover{
+background:#e64a19;
+}
+
+#predictions{
+margin-top:15px;
+font-weight:bold;
+color:#1a1a1a;
+text-align:left;
+font-size:16px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+<h1>Webcam Object Classification - Tanvi Beer</h1>
+
+<video id="webcam" autoplay playsinline></video>
+<br>
+<button onclick="startClassification()">Start Classification</button>
+
+<div id="predictions">Predictions will appear here</div>
+</div>
+
+<script>
+let model;
+const video = document.getElementById("webcam");
+const predictionsDiv = document.getElementById("predictions");
+
+// Setup webcam
+async function setupWebcam(){
+    const stream = await navigator.mediaDevices.getUserMedia({video:true});
+    video.srcObject = stream;
+    return new Promise(resolve=>{
+        video.onloadedmetadata = ()=>{ resolve(); }
+    })
+}
+
+// Start MobileNet classification
+async function startClassification(){
+    predictionsDiv.innerText = "Loading MobileNet model...";
+    model = await mobilenet.load();
+    predictionsDiv.innerText = "Model Loaded. Detecting...";
+
+    await setupWebcam();
+
+    classifyFrame();
+}
+
+// Classify each webcam frame
+async function classifyFrame(){
+    const predictions = await model.classify(video);
+
+    let top3 = predictions.slice(0,3);
+    predictionsDiv.innerHTML = top3.map((p,i)=>`${i+1}. ${p.className} - ${(p.probability*100).toFixed(2)}%`).join("<br>");
+
+    requestAnimationFrame(classifyFrame);
+}
+</script>
+
+</body>
+</html>
