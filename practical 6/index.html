@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Pose Detection | Tanvi</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet@2.2.2"></script>
+
+<style>
+body {
+    margin:0;
+    font-family: Arial;
+    background:#0f1f17;
+    color:white;
+    text-align:center;
+}
+
+h1 {
+    margin:10px;
+    color:#00ff9c;
+}
+
+.container {
+    display:flex;
+    justify-content:center;
+    gap:20px;
+    padding:20px;
+}
+
+/* LEFT */
+.left {
+    width:260px;
+    background:#13261c;
+    padding:20px;
+    border-radius:12px;
+    box-shadow:0 0 15px rgba(0,255,150,0.2);
+}
+
+button {
+    width:100%;
+    padding:12px;
+    margin-top:10px;
+    background:#00c97b;
+    color:black;
+    border:none;
+    border-radius:8px;
+    font-weight:bold;
+    cursor:pointer;
+}
+
+button:hover {
+    background:#00ff9c;
+}
+
+/* PIE */
+.pie {
+    width:160px;
+    height:160px;
+    border-radius:50%;
+    margin:20px auto;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-weight:bold;
+}
+
+/* RIGHT */
+.right {
+    position:relative;
+}
+
+video, canvas, img {
+    width:640px;
+    height:480px;
+    border-radius:12px;
+    border:2px solid #00ff9c;
+}
+
+canvas {
+    position:absolute;
+    left:0;
+    top:0;
+    z-index:10;
+}
+</style>
+</head>
+
+<body>
+
+<h1>Pose Detection</h1>
+<h3>By Tanvi</h3>
+
+<div class="container">
+
+    <div class="left">
+        <input type="file" id="upload">
+
+        <button onclick="analyzeImage()">Detect</button>
+        <button onclick="startCamera()">Click for Webcam</button>
+
+        <h3 id="result">Standing: 0% | Sitting: 0%</h3>
+
+        <div id="pieChart" class="pie">--</div>
+
+        <p style="color:#00ff9c;">■ Standing</p>
+        <p style="color:#ff4d4d;">■ Sitting</p>
+    </div>
+
+    <div class="right">
+        <video id="video" autoplay playsinline></video>
+        <img id="image" style="display:none;">
+        <canvas id="canvas"></canvas>
+    </div>
+
+</div>
+
+<script>
+let net;
+
+const video = document.getElementById("video");
+const image = document.getElementById("image");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+canvas.width = 640;
+canvas.height = 480;
+
+// LOAD MODEL
+async function loadModel(){
+    net = await posenet.load();
+}
+loadModel();
+
+// DRAW POINTS + LINES
+function draw(keypoints){
+    keypoints.forEach(k=>{
+        if(k.score > 0.1){
+            ctx.beginPath();
+            ctx.arc(k.position.x, k.position.y, 6, 0, 2*Math.PI);
+            ctx.fillStyle="red";
+            ctx.fill();
+        }
+    });
+
+    const pairs = posenet.getAdjacentKeyPoints(keypoints,0.1);
+
+    pairs.forEach(p=>{
+        ctx.beginPath();
+        ctx.moveTo(p[0].position.x,p[0].position.y);
+        ctx.lineTo(p[1].position.x,p[1].position.y);
+        ctx.strokeStyle="#00ff9c";
+        ctx.lineWidth=3;
+        ctx.stroke();
+    });
+}
+
+// STABLE LOGIC
+let lastScore = 50;
+
+function detectPosture(keypoints){
+
+    const get = name => keypoints.find(k => k.part === name);
+
+    let s = get("leftShoulder") || get("rightShoulder");
+    let h = get("leftHip") || get("rightHip");
+    let k = get("leftKnee") || get("rightKnee");
+
+    if(!s || !h){
+        updateUI(lastScore);
+        return;
+    }
+
+    let body = Math.abs(s.position.y - h.position.y);
+    let leg = k ? Math.abs(h.position.y - k.position.y) : body;
+
+    if(body + leg === 0){
+        updateUI(lastScore);
+        return;
+    }
+
+    let score = (body / (body + leg)) * 100;
+
+    score = (lastScore * 0.6) + (score * 0.4);
+    lastScore = score;
+
+    updateUI(score);
+}
+
+// UPDATE UI
+function updateUI(standingScore){
+
+    if(isNaN(standingScore)){
+        standingScore = lastScore;
+    }
+
+    let sittingScore = 100 - standingScore;
+    let result = standingScore > 50 ? "Standing" : "Sitting";
+
+    document.getElementById("result").innerText =
+        `Standing: ${standingScore.toFixed(1)}% | Sitting: ${sittingScore.toFixed(1)}%`;
+
+    document.getElementById("pieChart").style.background =
+        `conic-gradient(
+            #00ff9c 0% ${standingScore}%,
+            #ff4d4d ${standingScore}% 100%
+        )`;
+
+    document.getElementById("pieChart").innerText = result;
+}
+
+// IMAGE
+async function analyzeImage(){
+    const file = document.getElementById("upload").files[0];
+    if(!file) return;
+
+    video.style.display="none";
+    image.style.display="block";
+
+    image.src = URL.createObjectURL(file);
+
+    image.onload = async ()=>{
+        ctx.clearRect(0,0,640,480);
+        ctx.drawImage(image,0,0,640,480);
+
+        const pose = await net.estimateSinglePose(image);
+
+        draw(pose.keypoints);
+        detectPosture(pose.keypoints);
+    };
+}
+
+// WEBCAM
+async function startCamera(){
+    try{
+        image.style.display="none";
+        video.style.display="block";
+
+        const stream = await navigator.mediaDevices.getUserMedia({video:true});
+        video.srcObject = stream;
+
+        video.onloadedmetadata = ()=>{
+            video.play();
+            detectVideo();
+        };
+
+    }catch(err){
+        alert("Camera Error: " + err);
+    }
+}
+
+async function detectVideo(){
+    if(video.readyState === 4){
+
+        const pose = await net.estimateSinglePose(video,{flipHorizontal:true});
+
+        ctx.clearRect(0,0,640,480);
+        ctx.drawImage(video,0,0,640,480);
+
+        draw(pose.keypoints);
+        detectPosture(pose.keypoints);
+    }
+
+    requestAnimationFrame(detectVideo);
+}
+</script>
+
+</body>
+</html>
