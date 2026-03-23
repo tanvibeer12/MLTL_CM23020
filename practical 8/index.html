@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Transfer Learning Advanced - Tanvi</title>
+
+    <!-- TensorFlow -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0"></script>
+
+    <!-- MobileNet -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body{
+            margin:0;
+            font-family:'Segoe UI';
+            background: linear-gradient(135deg,#1d2b64,#f8cdda);
+            color:white;
+            text-align:center;
+        }
+
+        h1{margin-top:15px;}
+
+        .container{
+            display:flex;
+            justify-content:center;
+            gap:20px;
+            flex-wrap:wrap;
+        }
+
+        .card{
+            background: rgba(255,255,255,0.15);
+            backdrop-filter: blur(12px);
+            padding:20px;
+            border-radius:15px;
+            width:300px;
+        }
+
+        button{
+            width:100%;
+            padding:10px;
+            margin:5px 0;
+            border:none;
+            border-radius:10px;
+            background:#00c6ff;
+            color:white;
+            font-weight:bold;
+            cursor:pointer;
+        }
+
+        input{
+            width:100%;
+            padding:10px;
+            border-radius:10px;
+            border:none;
+            margin:5px 0;
+        }
+
+        img{
+            width:100%;
+            margin-top:10px;
+            border-radius:10px;
+        }
+
+        table{
+            width:100%;
+            margin-top:10px;
+            border-collapse:collapse;
+        }
+
+        td, th{
+            border:1px solid white;
+            padding:5px;
+        }
+
+        #log{
+            margin-top:15px;
+            white-space:pre-line;
+        }
+    </style>
+</head>
+
+<body>
+
+<h1>🍎 Transfer Learning (MobileNet)</h1>
+<h3>Tanvi</h3>
+
+<div class="container">
+
+    <!-- Upload -->
+    <div class="card">
+        <h3>📥 Add Data</h3>
+        <input type="file" id="imgUpload">
+        <input type="text" id="label" placeholder="Label (apple)">
+        <button onclick="preview()">Preview</button>
+        <button onclick="addExample()">Add Example</button>
+        <img id="previewImg">
+    </div>
+
+    <!-- Train -->
+    <div class="card">
+        <h3>🧠 Train</h3>
+        <button onclick="train()">Train Model</button>
+        <canvas id="chart"></canvas>
+    </div>
+
+    <!-- Predict -->
+    <div class="card">
+        <h3>🔍 Predict</h3>
+        <button onclick="predict()">Predict</button>
+        <div id="prediction"></div>
+    </div>
+
+    <!-- Evaluation -->
+    <div class="card">
+        <h3>📊 Evaluation</h3>
+        <button onclick="evaluate()">Accuracy</button>
+        <button onclick="showMatrix()">Confusion Matrix</button>
+        <div id="accuracy"></div>
+        <div id="matrix"></div>
+    </div>
+
+</div>
+
+<div id="log"></div>
+
+<script>
+
+let mobilenetModel;
+let classifier;
+let data=[], labels=[];
+let labelMap={}, labelCount=0;
+let chart;
+
+// Load MobileNet
+async function init(){
+    mobilenetModel = await mobilenet.load();
+    log("✅ MobileNet Loaded");
+}
+init();
+
+// Preview Image
+function preview(){
+    const file = document.getElementById("imgUpload").files[0];
+    document.getElementById("previewImg").src = URL.createObjectURL(file);
+}
+
+// Add Data
+async function addExample(){
+    const file = document.getElementById("imgUpload").files[0];
+    const label = document.getElementById("label").value;
+
+    if(!file || !label){
+        alert("Upload + label");
+        return;
+    }
+
+    const img = new Image();
+    img.src = URL.createObjectURL(file);
+
+    img.onload = async () => {
+
+        const tensor = tf.browser.fromPixels(img)
+        .resizeNearestNeighbor([224,224])
+        .toFloat().expandDims();
+
+        const features = mobilenetModel.infer(tensor,true);
+
+        if(!(label in labelMap)){
+            labelMap[label] = labelCount++;
+        }
+
+        data.push(features);
+        labels.push(labelMap[label]);
+
+        log("Added: " + label);
+    };
+}
+
+// Train
+async function train(){
+
+    const xs = tf.concat(data);
+    const ys = tf.oneHot(tf.tensor1d(labels,'int32'), labelCount);
+
+    classifier = tf.sequential();
+    classifier.add(tf.layers.dense({units:64,activation:'relu',inputShape:[xs.shape[1]]}));
+    classifier.add(tf.layers.dense({units:labelCount,activation:'softmax'}));
+
+    classifier.compile({
+        optimizer:'adam',
+        loss:'categoricalCrossentropy',
+        metrics:['accuracy']
+    });
+
+    let losses=[];
+
+    await classifier.fit(xs,ys,{
+        epochs:20,
+        callbacks:{
+            onEpochEnd:(e,logs)=>{
+                losses.push(logs.loss);
+                drawChart(losses);
+            }
+        }
+    });
+
+    log("🎯 Training Done");
+}
+
+// Chart
+function drawChart(losses){
+    if(chart) chart.destroy();
+
+    chart = new Chart(document.getElementById("chart"),{
+        type:'line',
+        data:{
+            labels:losses.map((_,i)=>i+1),
+            datasets:[{label:'Loss',data:losses}]
+        }
+    });
+}
+
+// Predict
+async function predict(){
+
+    const file = document.getElementById("imgUpload").files[0];
+    const img = new Image();
+    img.src = URL.createObjectURL(file);
+
+    img.onload = async () => {
+
+        const tensor = tf.browser.fromPixels(img)
+        .resizeNearestNeighbor([224,224])
+        .toFloat().expandDims();
+
+        const features = mobilenetModel.infer(tensor,true);
+
+        const preds = classifier.predict(features).dataSync();
+
+        let arr = Array.from(preds)
+        .map((v,i)=>({label:Object.keys(labelMap)[i],prob:v}))
+        .sort((a,b)=>b.prob-a.prob);
+
+        let top3 = arr.slice(0,3);
+
+        document.getElementById("prediction").innerHTML =
+            top3.map(x=>`${x.label}: ${(x.prob*100).toFixed(2)}%`).join("<br>");
+    };
+}
+
+// Accuracy
+async function evaluate(){
+
+    const xs = tf.concat(data);
+    const ys = tf.tensor1d(labels,'int32');
+
+    const pred = classifier.predict(xs).argMax(-1);
+
+    const p = pred.dataSync();
+    const t = ys.dataSync();
+
+    let correct=0;
+
+    for(let i=0;i<p.length;i++){
+        if(p[i]===t[i]) correct++;
+    }
+
+    let acc = (correct/p.length)*100;
+
+    document.getElementById("accuracy").innerText =
+        "Accuracy: " + acc.toFixed(2) + "%";
+}
+
+// Confusion Matrix UI
+function showMatrix(){
+
+    let matrix = Array(labelCount).fill(0)
+        .map(()=>Array(labelCount).fill(0));
+
+    const xs = tf.concat(data);
+    const ys = tf.tensor1d(labels,'int32');
+
+    const pred = classifier.predict(xs).argMax(-1);
+
+    const p = pred.dataSync();
+    const t = ys.dataSync();
+
+    for(let i=0;i<p.length;i++){
+        matrix[t[i]][p[i]]++;
+    }
+
+    let html="<table><tr><th></th>";
+
+    Object.keys(labelMap).forEach(l=>{
+        html+=`<th>${l}</th>`;
+    });
+
+    html+="</tr>";
+
+    matrix.forEach((row,i)=>{
+        html+=`<tr><th>${Object.keys(labelMap)[i]}</th>`;
+        row.forEach(v=>{
+            html+=`<td>${v}</td>`;
+        });
+        html+="</tr>";
+    });
+
+    html+="</table>";
+
+    document.getElementById("matrix").innerHTML = html;
+}
+
+// Logger
+function log(msg){
+    document.getElementById("log").innerText += msg + "\n";
+}
+
+</script>
+
+</body>
+</html>
