@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Accuracy Analysis | Tanvi</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet"></script>
+
+<style>
+body{
+    margin:0;
+    font-family:Arial;
+    background:#0f1f17;
+    color:white;
+    text-align:center;
+}
+
+h1{ color:#00ff9c; }
+
+.controls{
+    margin:15px;
+}
+
+button{
+    padding:10px;
+    margin:5px;
+    background:#00c97b;
+    border:none;
+    border-radius:5px;
+    cursor:pointer;
+}
+
+.container{
+    display:flex;
+    justify-content:center;
+    gap:20px;
+    padding:20px;
+}
+
+.panel{
+    background:#13261c;
+    padding:15px;
+    border-radius:10px;
+}
+
+canvas{
+    border:2px solid #00ff9c;
+    border-radius:10px;
+}
+
+.result{
+    margin-top:10px;
+    font-size:16px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>Accuracy Analysis: Single vs Multi Pose</h1>
+<h3>By Tanvi</h3>
+
+<div class="controls">
+    <input type="file" id="upload">
+    <button onclick="analyzeImage()">Analyze Image</button>
+    <button onclick="startCamera()">Start Webcam</button>
+</div>
+
+<div class="container">
+
+    <!-- SINGLE -->
+    <div class="panel">
+        <h3>Single Pose</h3>
+        <canvas id="canvas1" width="400" height="300"></canvas>
+        <div class="result">
+            Confidence: <span id="singleConf">-</span>
+        </div>
+    </div>
+
+    <!-- MULTI -->
+    <div class="panel">
+        <h3>Multi Pose</h3>
+        <canvas id="canvas2" width="400" height="300"></canvas>
+        <div class="result">
+            Persons: <span id="multiCount">-</span><br>
+            Avg Confidence: <span id="multiConf">-</span>
+        </div>
+    </div>
+
+</div>
+
+<h2 id="analysis">Accuracy Difference: -</h2>
+
+<video id="video" width="400" height="300" autoplay style="display:none;"></video>
+<img id="image" style="display:none;">
+
+<script>
+let net;
+
+const video = document.getElementById("video");
+const image = document.getElementById("image");
+
+const canvas1 = document.getElementById("canvas1");
+const ctx1 = canvas1.getContext("2d");
+
+const canvas2 = document.getElementById("canvas2");
+const ctx2 = canvas2.getContext("2d");
+
+// LOAD MODEL
+async function load(){
+    net = await posenet.load();
+}
+load();
+
+// DRAW
+function draw(ctx, keypoints){
+    keypoints.forEach(k=>{
+        if(k.score > 0.1){
+            ctx.beginPath();
+            ctx.arc(k.position.x,k.position.y,5,0,2*Math.PI);
+            ctx.fillStyle="red";
+            ctx.fill();
+        }
+    });
+
+    const pairs = posenet.getAdjacentKeyPoints(keypoints,0.1);
+
+    pairs.forEach(p=>{
+        ctx.beginPath();
+        ctx.moveTo(p[0].position.x,p[0].position.y);
+        ctx.lineTo(p[1].position.x,p[1].position.y);
+        ctx.strokeStyle="lime";
+        ctx.stroke();
+    });
+}
+
+// CALCULATE ACCURACY
+function updateAnalysis(singleConf, multiAvg){
+
+    let diff = singleConf - multiAvg;
+
+    document.getElementById("analysis").innerText =
+        "Accuracy Difference: " + diff.toFixed(3);
+}
+
+// IMAGE
+async function analyzeImage(){
+
+    const file = document.getElementById("upload").files[0];
+    if(!file) return;
+
+    video.style.display="none";
+    image.style.display="block";
+
+    image.src = URL.createObjectURL(file);
+
+    image.onload = async ()=>{
+
+        ctx1.clearRect(0,0,400,300);
+        ctx2.clearRect(0,0,400,300);
+
+        ctx1.drawImage(image,0,0,400,300);
+        ctx2.drawImage(image,0,0,400,300);
+
+        // SINGLE
+        const singlePose = await net.estimateSinglePose(image);
+        draw(ctx1, singlePose.keypoints);
+
+        let singleConf = singlePose.score;
+
+        document.getElementById("singleConf").innerText =
+            singleConf.toFixed(3);
+
+        // MULTI
+        const multiPose = await net.estimateMultiplePoses(image);
+
+        let total = 0;
+
+        multiPose.forEach(p=>{
+            draw(ctx2, p.keypoints);
+            total += p.score;
+        });
+
+        let avg = multiPose.length ? total/multiPose.length : 0;
+
+        document.getElementById("multiCount").innerText = multiPose.length;
+        document.getElementById("multiConf").innerText = avg.toFixed(3);
+
+        updateAnalysis(singleConf, avg);
+    };
+}
+
+// WEBCAM
+async function startCamera(){
+
+    image.style.display="none";
+    video.style.display="block";
+
+    const stream = await navigator.mediaDevices.getUserMedia({video:true});
+    video.srcObject = stream;
+
+    video.onloadedmetadata = ()=>{
+        video.play();
+        detectVideo();
+    };
+}
+
+// VIDEO
+async function detectVideo(){
+
+    if(video.readyState === 4){
+
+        ctx1.clearRect(0,0,400,300);
+        ctx2.clearRect(0,0,400,300);
+
+        ctx1.drawImage(video,0,0,400,300);
+        ctx2.drawImage(video,0,0,400,300);
+
+        // SINGLE
+        const singlePose = await net.estimateSinglePose(video);
+        draw(ctx1, singlePose.keypoints);
+
+        let singleConf = singlePose.score;
+
+        document.getElementById("singleConf").innerText =
+            singleConf.toFixed(3);
+
+        // MULTI
+        const multiPose = await net.estimateMultiplePoses(video);
+
+        let total = 0;
+
+        multiPose.forEach(p=>{
+            draw(ctx2, p.keypoints);
+            total += p.score;
+        });
+
+        let avg = multiPose.length ? total/multiPose.length : 0;
+
+        document.getElementById("multiCount").innerText = multiPose.length;
+        document.getElementById("multiConf").innerText = avg.toFixed(3);
+
+        updateAnalysis(singleConf, avg);
+    }
+
+    requestAnimationFrame(detectVideo);
+}
+</script>
+
+</body>
+</html>
