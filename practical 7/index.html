@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Model Deployment - Tanvi</title>
+
+    <!-- TensorFlow -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0"></script>
+
+    <style>
+        *{
+            margin:0;
+            padding:0;
+            box-sizing:border-box;
+            font-family: 'Segoe UI';
+        }
+
+        body{
+            height:100vh;
+            display:flex;
+            background: linear-gradient(120deg, #141e30, #243b55);
+            color:white;
+        }
+
+        .left{
+            width:40%;
+            display:flex;
+            flex-direction:column;
+            justify-content:center;
+            align-items:center;
+        }
+
+        .left h1{
+            font-size:42px;
+        }
+
+        .left p{
+            margin-top:10px;
+            opacity:0.8;
+        }
+
+        .right{
+            width:60%;
+            display:flex;
+            justify-content:center;
+            align-items:center;
+        }
+
+        .box{
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(15px);
+            padding:30px;
+            border-radius:20px;
+            width:380px;
+            box-shadow:0 0 20px rgba(0,0,0,0.3);
+        }
+
+        input{
+            width:100%;
+            padding:12px;
+            margin:10px 0;
+            border:none;
+            border-radius:10px;
+        }
+
+        .btn{
+            width:100%;
+            padding:12px;
+            margin:6px 0;
+            border:none;
+            border-radius:10px;
+            background: linear-gradient(45deg,#00c6ff,#0072ff);
+            color:white;
+            font-weight:bold;
+            cursor:pointer;
+            transition:0.3s;
+        }
+
+        .btn:hover{
+            transform:scale(1.05);
+        }
+
+        .output{
+            margin-top:15px;
+            text-align:center;
+            font-size:18px;
+        }
+
+        .file{
+            margin-top:10px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="left">
+    <h1>🤖 Model Deployment</h1>
+    <p>TensorFlow.js Practical | Tanvi</p>
+</div>
+
+<div class="right">
+
+    <div class="box">
+
+        <button class="btn" onclick="trainModel()">Train Model</button>
+        <button class="btn" onclick="saveModel()">Save Model</button>
+        <button class="btn" onclick="loadModel()">Load Model</button>
+
+        <input type="number" id="x" placeholder="Enter X value">
+
+        <button class="btn" onclick="predict()">Predict</button>
+
+        <div class="output" id="result"></div>
+
+        <hr style="margin:15px 0">
+
+        <button class="btn" onclick="exportModel()">Export Model</button>
+
+        <input type="file" id="upload" multiple class="file">
+
+        <button class="btn" onclick="importModel()">Import Model</button>
+
+    </div>
+
+</div>
+
+<script>
+
+// 🔥 Fix WebGL issue
+tf.setBackend('cpu');
+
+let model;
+
+// TRAIN MODEL
+async function trainModel(){
+    model = tf.sequential();
+    model.add(tf.layers.dense({units:1, inputShape:[1]}));
+
+    model.compile({
+        loss:'meanSquaredError',
+        optimizer:'sgd'
+    });
+
+    const xs = tf.tensor2d([1,2,3,4,5], [5,1]);
+    const ys = tf.tensor2d([3,5,7,9,11], [5,1]); // y = 2x + 1
+
+    await model.fit(xs, ys, {epochs:100});
+
+    console.log("✅ Model trained");
+    alert("Model Trained!");
+}
+
+// SAVE MODEL
+async function saveModel(){
+    if(!model){
+        alert("Train first!");
+        return;
+    }
+
+    await model.save('localstorage://tanvi-model');
+    console.log("💾 Model saved");
+    alert("Saved!");
+}
+
+// LOAD MODEL
+async function loadModel(){
+    model = await tf.loadLayersModel('localstorage://tanvi-model');
+    console.log("📂 Model loaded");
+    alert("Loaded!");
+}
+
+// PREDICT (✅ FIXED)
+async function predict(){
+    if(!model){
+        alert("Train or Load model first!");
+        return;
+    }
+
+    // ✅ FIX: convert to number
+    let x = parseFloat(document.getElementById("x").value);
+
+    if(isNaN(x)){
+        alert("Enter valid number!");
+        return;
+    }
+
+    let pred = model.predict(tf.tensor2d([x],[1,1]));
+    let value = (await pred.data())[0];
+
+    document.getElementById("result").innerText =
+        "Prediction: " + value.toFixed(2);
+
+    console.log("🔍 Prediction:", value);
+}
+
+// EXPORT MODEL
+async function exportModel(){
+    if(!model){
+        alert("Train first!");
+        return;
+    }
+
+    await model.save('downloads://tanvi-model');
+    console.log("⬇ Model exported");
+    alert("Downloaded!");
+}
+
+// IMPORT MODEL
+async function importModel(){
+    let files = document.getElementById("upload").files;
+
+    if(files.length < 2){
+        alert("Upload model.json + weights.bin");
+        return;
+    }
+
+    model = await tf.loadLayersModel(
+        tf.io.browserFiles([files[0], files[1]])
+    );
+
+    console.log("📥 Model imported");
+    alert("Imported!");
+}
+
+</script>
+
+</body>
+</html>
