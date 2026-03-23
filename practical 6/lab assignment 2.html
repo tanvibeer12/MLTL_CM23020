@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Squat Counter | Tanvi</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet"></script>
+
+<style>
+body{
+    margin:0;
+    font-family:Arial;
+    background:#0f1f17;
+    color:white;
+    text-align:center;
+}
+
+h1{ color:#00ff9c; }
+
+.container{
+    display:flex;
+    justify-content:center;
+    gap:20px;
+    padding:20px;
+}
+
+/* LEFT PANEL */
+.left{
+    width:260px;
+    background:#13261c;
+    padding:20px;
+    border-radius:10px;
+}
+
+button{
+    width:100%;
+    padding:10px;
+    margin-top:10px;
+    background:#00c97b;
+    border:none;
+    border-radius:5px;
+    cursor:pointer;
+}
+
+button:hover{ background:#00ff9c; }
+
+/* RIGHT */
+.right{
+    position:relative;
+}
+
+video, canvas, img{
+    width:640px;
+    height:480px;
+    border:2px solid #00ff9c;
+    border-radius:10px;
+}
+
+canvas{
+    position:absolute;
+    top:0;
+    left:0;
+    z-index:10;
+}
+</style>
+</head>
+
+<body>
+
+<h1>Squat Counter</h1>
+<h3>By Tanvi</h3>
+
+<div class="container">
+
+    <!-- LEFT -->
+    <div class="left">
+
+        <input type="file" id="upload">
+
+        <button onclick="analyzeImage()">Detect Image</button>
+        <button onclick="startCamera()">Start Webcam</button>
+
+        <h3>Reps: <span id="count">0</span></h3>
+        <h3>Status: <span id="status">UNKNOWN</span></h3>
+        <h3>Angle: <span id="angle">0</span></h3>
+
+    </div>
+
+    <!-- RIGHT -->
+    <div class="right">
+        <video id="video" autoplay playsinline></video>
+        <img id="image" style="display:none;">
+        <canvas id="canvas"></canvas>
+    </div>
+
+</div>
+
+<script>
+let net;
+let count = 0;
+let state = "up";
+let lastAngle = 0;
+
+const video = document.getElementById("video");
+const image = document.getElementById("image");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+canvas.width = 640;
+canvas.height = 480;
+
+// LOAD MODEL
+async function load(){
+    net = await posenet.load();
+}
+load();
+
+// ANGLE FUNCTION
+function getAngle(a,b,c){
+    let ab = {x: a.x - b.x, y: a.y - b.y};
+    let cb = {x: c.x - b.x, y: c.y - b.y};
+
+    let dot = ab.x*cb.x + ab.y*cb.y;
+    let magAB = Math.sqrt(ab.x**2 + ab.y**2);
+    let magCB = Math.sqrt(cb.x**2 + cb.y**2);
+
+    let angle = Math.acos(dot/(magAB*magCB));
+    return angle * (180/Math.PI);
+}
+
+// DRAW
+function draw(keypoints){
+    keypoints.forEach(k=>{
+        if(k.score>0.1){
+            ctx.beginPath();
+            ctx.arc(k.position.x,k.position.y,6,0,2*Math.PI);
+            ctx.fillStyle="red";
+            ctx.fill();
+        }
+    });
+
+    const pairs = posenet.getAdjacentKeyPoints(keypoints,0.1);
+    pairs.forEach(p=>{
+        ctx.beginPath();
+        ctx.moveTo(p[0].position.x,p[0].position.y);
+        ctx.lineTo(p[1].position.x,p[1].position.y);
+        ctx.strokeStyle="#00ff9c";
+        ctx.lineWidth=3;
+        ctx.stroke();
+    });
+}
+
+// ✅ FINAL PROCESS LOGIC
+function processPose(keypoints){
+
+    const get = name => keypoints.find(k=>k.part===name);
+
+    let hip = get("leftHip") || get("rightHip");
+    let knee = get("leftKnee") || get("rightKnee");
+    let ankle = get("leftAnkle") || get("rightAnkle");
+
+    if(!hip || !knee || !ankle){
+        updateUI("UNKNOWN", lastAngle);
+        return;
+    }
+
+    if(hip.score < 0.2 || knee.score < 0.2 || ankle.score < 0.2){
+        updateUI("UNKNOWN", lastAngle);
+        return;
+    }
+
+    let angle;
+
+    try{
+        angle = getAngle(hip.position, knee.position, ankle.position);
+    }catch{
+        angle = lastAngle;
+    }
+
+    if(isNaN(angle)) angle = lastAngle;
+
+    // smoothing
+    angle = (lastAngle * 0.6) + (angle * 0.4);
+    lastAngle = angle;
+
+    let status;
+
+    if(angle < 100){
+        status = "DOWN";
+    }
+    else if(angle > 160){
+        status = "UP";
+    }
+    else{
+        status = "MID";
+    }
+
+    // COUNT LOGIC
+    if(status === "DOWN"){
+        state = "down";
+    }
+
+    if(status === "UP" && state === "down"){
+        state = "up";
+        count++;
+    }
+
+    updateUI(status, angle);
+}
+
+// UPDATE UI
+function updateUI(status, angle){
+    document.getElementById("status").innerText = status;
+    document.getElementById("angle").innerText = angle.toFixed(1);
+    document.getElementById("count").innerText = count;
+}
+
+// IMAGE MODE
+async function analyzeImage(){
+    const file = document.getElementById("upload").files[0];
+    if(!file) return;
+
+    video.style.display="none";
+    image.style.display="block";
+
+    image.src = URL.createObjectURL(file);
+
+    image.onload = async ()=>{
+        ctx.clearRect(0,0,640,480);
+        ctx.drawImage(image,0,0,640,480);
+
+        const pose = await net.estimateSinglePose(image);
+
+        draw(pose.keypoints);
+        processPose(pose.keypoints);
+    };
+}
+
+// WEBCAM
+async function startCamera(){
+    image.style.display="none";
+    video.style.display="block";
+
+    const stream = await navigator.mediaDevices.getUserMedia({video:true});
+    video.srcObject = stream;
+
+    video.onloadedmetadata = ()=>{
+        video.play();
+        detectVideo();
+    };
+}
+
+async function detectVideo(){
+    if(video.readyState === 4){
+
+        const pose = await net.estimateSinglePose(video,{flipHorizontal:true});
+
+        ctx.clearRect(0,0,640,480);
+        ctx.drawImage(video,0,0,640,480);
+
+        draw(pose.keypoints);
+        processPose(pose.keypoints);
+    }
+
+    requestAnimationFrame(detectVideo);
+}
+</script>
+
+</body>
+</html>
